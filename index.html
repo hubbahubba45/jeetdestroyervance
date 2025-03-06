@@ -597,44 +597,49 @@
             gameOverElement.style.display = 'block';
         }
         
-        // Restart game
-        function restartGame() {
-            // Reset scores and health
-            score = 0;
-            tanksDestroyed = 0;
-            health = 100;
-            level = 1;
-            tankSpawnRate = 3000;
-            
-            // Update UI
-            scoreElement.textContent = '0';
-            tanksDestroyedElement.textContent = '0';
-            healthElement.textContent = '100';
-            levelElement.textContent = '1';
-            
-            // Clear projectiles and tanks
-            document.querySelectorAll('.strawberry, .lemon, .tank, .explosion').forEach(el => el.remove());
-            tanks = [];
-            
-            // Reset helicopter position
-            helicopterX = 50;
-            helicopterY = 30;
-            targetX = helicopterX;
-            targetY = helicopterY;
-            updateHelicopterPosition();
-            
-            // Turn off autofire
-            autoFireActive = false;
-            autoFireButton.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-            
-            // Hide game over
-            gameOverElement.style.display = 'none';
-            
-            // Restart game
-            gameActive = true;
-            lastTankSpawn = 0;
-            initGame();
-        }
+        // Replace the restartGame function with this fixed version:
+function restartGame() {
+    // Reset scores and health
+    score = 0;
+    tanksDestroyed = 0;
+    health = 100;
+    level = 1;
+    tankSpawnRate = 3000;
+    
+    // Update UI
+    scoreElement.textContent = '0';
+    tanksDestroyedElement.textContent = '0';
+    healthElement.textContent = '100';
+    levelElement.textContent = '1';
+    
+    // Clear projectiles and tanks
+    document.querySelectorAll('.strawberry, .lemon, .tank, .explosion').forEach(el => el.remove());
+    tanks = [];
+    
+    // Reset helicopter position
+    helicopterX = 50;
+    helicopterY = 30;
+    targetX = helicopterX;
+    targetY = helicopterY;
+    updateHelicopterPosition();
+    
+    // Reset autofire state without changing the button visual state
+    // This is the key fix - don't reset autoFireActive to false
+    autoFireButton.style.backgroundColor = autoFireActive ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+    
+    // Hide game over
+    gameOverElement.style.display = 'none';
+    
+    // Restart game
+    gameActive = true;
+    lastTankSpawn = 0;
+    
+    // Restart game loop
+    requestAnimationFrame(gameLoop);
+    
+    // Start spawning tanks again
+    spawnTank();
+}
         
         // Convert page coordinates to percentage positions
         function getPercentPosition(clientX, clientY) {
