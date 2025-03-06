@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Helicopter vs Tank Army</title>
+    <title>Jeet Destroyer Vance</title>
+    <link rel="icon" href="apache.png" type="image/png">
     <style>
         body {
             margin: 0;
@@ -21,12 +22,22 @@
             overflow: hidden;
         }
         
+        #sky {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 80%;
+            z-index: 4;
+        }
+        
         #ground {
             position: absolute;
             bottom: 0;
             width: 100%;
             height: 20%;
             background-color: #8B4513;
+            z-index: 5;
+            cursor: pointer;
         }
         
         #helicopter {
@@ -96,7 +107,7 @@
             z-index: 20;
         }
         
-        #fire-button {
+        #auto-fire-button {
             position: absolute;
             bottom: 20px;
             right: 20px;
@@ -165,10 +176,11 @@
         
         <div id="level-indicator">Level: <span id="level">1</span></div>
         
+        <div id="sky"></div>
         <div id="helicopter"></div>
         <div id="ground"></div>
         
-        <div id="fire-button">FIRE</div>
+        <div id="auto-fire-button">AUTO</div>
         
         <div id="game-over">
             <h2>Game Over!</h2>
@@ -181,6 +193,8 @@
     <script>
         // Game elements
         const gameContainer = document.getElementById('game-container');
+        const sky = document.getElementById('sky');
+        const ground = document.getElementById('ground');
         const helicopter = document.getElementById('helicopter');
         const scoreElement = document.getElementById('score');
         const tanksDestroyedElement = document.getElementById('tanks-destroyed');
@@ -189,10 +203,11 @@
         const gameOverElement = document.getElementById('game-over');
         const finalScoreElement = document.getElementById('final-score');
         const restartBtn = document.getElementById('restart-btn');
-        const fireButton = document.getElementById('fire-button');
+        const autoFireButton = document.getElementById('auto-fire-button');
         
         // Game state
         let gameActive = true;
+        let autoFireActive = false;
         let score = 0;
         let tanksDestroyed = 0;
         let health = 100;
@@ -239,6 +254,11 @@
             if (timestamp - lastTankSpawn > tankSpawnRate) {
                 spawnTank();
                 lastTankSpawn = timestamp;
+            }
+            
+            // Auto-fire if active
+            if (autoFireActive) {
+                fireDownward();
             }
             
             requestAnimationFrame(gameLoop);
@@ -315,8 +335,8 @@
             });
         }
         
-        // Fire strawberry from helicopter
-        function fireStrawberry() {
+        // Fire straight downward from helicopter (for auto-fire)
+        function fireDownward() {
             const now = Date.now();
             if (now - lastFire < fireRate) return;
             lastFire = now;
@@ -335,12 +355,45 @@
             strawberry.style.left = strawberryX + '%';
             strawberry.style.top = strawberryY + '%';
             
+            // Add to projectiles data - straight down
+            strawberry.dataset.type = 'strawberry';
+            strawberry.dataset.x = strawberryX;
+            strawberry.dataset.y = strawberryY;
+            strawberry.dataset.speed = 2 + Math.random();
+            strawberry.dataset.angle = Math.PI / 2; // Exactly downward
+        }
+        
+        // Fire strawberry from helicopter toward a target
+        function fireAtTarget(targetX, targetY) {
+            const now = Date.now();
+            if (now - lastFire < fireRate) return;
+            lastFire = now;
+            
+            const strawberry = document.createElement('div');
+            strawberry.className = 'strawberry';
+            gameContainer.appendChild(strawberry);
+            
+            // Position strawberry at helicopter position
+            const helicopterRect = helicopter.getBoundingClientRect();
+            const gameRect = gameContainer.getBoundingClientRect();
+            
+            const strawberryX = (helicopterRect.left + helicopterRect.width / 2 - gameRect.left) / gameRect.width * 100;
+            const strawberryY = (helicopterRect.bottom - gameRect.top) / gameRect.height * 100;
+            
+            strawberry.style.left = strawberryX + '%';
+            strawberry.style.top = strawberryY + '%';
+            
+            // Calculate angle toward target
+            const dx = targetX - strawberryX;
+            const dy = targetY - strawberryY;
+            const angle = Math.atan2(dy, dx);
+            
             // Add to projectiles data
             strawberry.dataset.type = 'strawberry';
             strawberry.dataset.x = strawberryX;
             strawberry.dataset.y = strawberryY;
             strawberry.dataset.speed = 2 + Math.random();
-            strawberry.dataset.angle = Math.PI / 2 + (Math.random() - 0.5) * 0.2; // Mostly downward
+            strawberry.dataset.angle = angle;
         }
         
         // Fire lemon from tank
@@ -532,6 +585,7 @@
         // End game
         function endGame() {
             gameActive = false;
+            autoFireActive = false;
             
             // Display final scores
             finalScoreElement.innerHTML = `
@@ -569,6 +623,10 @@
             targetY = helicopterY;
             updateHelicopterPosition();
             
+            // Turn off autofire
+            autoFireActive = false;
+            autoFireButton.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+            
             // Hide game over
             gameOverElement.style.display = 'none';
             
@@ -578,48 +636,77 @@
             initGame();
         }
         
+        // Convert page coordinates to percentage positions
+        function getPercentPosition(clientX, clientY) {
+            const rect = gameContainer.getBoundingClientRect();
+            return {
+                x: (clientX - rect.left) / rect.width * 100,
+                y: (clientY - rect.top) / rect.height * 100
+            };
+        }
+        
         // Setup touch and mouse controls
         function setupControls() {
-            // Movement across the entire game container
-            gameContainer.addEventListener('touchmove', (e) => {
+            // Movement in the sky area only
+            sky.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 const touch = e.touches[0];
-                const rect = gameContainer.getBoundingClientRect();
-                targetX = (touch.clientX - rect.left) / rect.width * 100;
-                targetY = (touch.clientY - rect.top) / rect.height * 100;
+                const pos = getPercentPosition(touch.clientX, touch.clientY);
+                targetX = pos.x;
+                targetY = pos.y;
+            }, { passive: false });
+            
+            sky.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const pos = getPercentPosition(touch.clientX, touch.clientY);
+                targetX = pos.x;
+                targetY = pos.y;
+            }, { passive: false });
+            
+            sky.addEventListener('mousedown', (e) => {
+                const pos = getPercentPosition(e.clientX, e.clientY);
+                targetX = pos.x;
+                targetY = pos.y;
             });
             
-            gameContainer.addEventListener('mousemove', (e) => {
+            sky.addEventListener('mousemove', (e) => {
                 if (e.buttons === 1) { // Left mouse button pressed
-                    const rect = gameContainer.getBoundingClientRect();
-                    targetX = (e.clientX - rect.left) / rect.width * 100;
-                    targetY = (e.clientY - rect.top) / rect.height * 100;
+                    const pos = getPercentPosition(e.clientX, e.clientY);
+                    targetX = pos.x;
+                    targetY = pos.y;
                 }
             });
             
-            // Fire button controls
-            fireButton.addEventListener('touchstart', (e) => {
+            // Ground fires at target
+            ground.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                startFiring();
+                const touch = e.touches[0];
+                const pos = getPercentPosition(touch.clientX, touch.clientY);
+                fireAtTarget(pos.x, pos.y);
+            }, { passive: false });
+            
+            ground.addEventListener('mousedown', (e) => {
+                const pos = getPercentPosition(e.clientX, e.clientY);
+                fireAtTarget(pos.x, pos.y);
             });
             
-            fireButton.addEventListener('touchend', (e) => {
+            // Auto-fire button
+            autoFireButton.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                stopFiring();
-            });
+                toggleAutoFire();
+            }, { passive: false });
             
-            fireButton.addEventListener('mousedown', () => {
-                startFiring();
-            });
-            
-            fireButton.addEventListener('mouseup', () => {
-                stopFiring();
+            autoFireButton.addEventListener('mousedown', () => {
+                toggleAutoFire();
             });
             
             // Keyboard controls
             document.addEventListener('keydown', (e) => {
                 if (e.key === ' ' || e.key === 'f') {
-                    fireStrawberry();
+                    fireDownward();
+                } else if (e.key === 'a') {
+                    toggleAutoFire();
                 }
             });
             
@@ -627,16 +714,14 @@
             restartBtn.addEventListener('click', restartGame);
         }
         
-        // Auto-fire control
-        let autoFireInterval;
-        
-        function startFiring() {
-            fireStrawberry();
-            autoFireInterval = setInterval(fireStrawberry, fireRate);
-        }
-        
-        function stopFiring() {
-            clearInterval(autoFireInterval);
+        // Toggle auto-fire
+        function toggleAutoFire() {
+            autoFireActive = !autoFireActive;
+            if (autoFireActive) {
+                autoFireButton.style.backgroundColor = 'rgba(0, 255, 0, 0.5)';
+            } else {
+                autoFireButton.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+            }
         }
         
         // Initialize on window load to ensure all assets are loaded
