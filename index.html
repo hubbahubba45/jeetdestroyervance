@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helicopter vs Tank Army</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #87CEEB;
+            overflow: hidden;
+        }
+        
+        #ground {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 20%;
+            background-color: #8B4513;
+        }
+        
+        #helicopter {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            background-image: url('apache.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 10;
+            transform-origin: center;
+        }
+        
+        .tank {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background-image: url('tank.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            bottom: 20%;
+            z-index: 5;
+        }
+        
+        .strawberry {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-image: url('strawberry.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 5;
+        }
+        
+        .lemon {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-image: url('lemon.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 5;
+        }
+        
+        .explosion {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, #ff5722, #ff9800, transparent);
+            border-radius: 50%;
+            z-index: 15;
+            animation: explode 0.5s forwards;
+        }
+        
+        @keyframes explode {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        
+        #score-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 20;
+        }
+        
+        #fire-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: white;
+            z-index: 20;
+        }
+        
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            z-index: 30;
+        }
+        
+        #restart-btn, #discord-btn {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        
+        #discord-btn {
+            background-color: #7289DA;
+        }
+        
+        #level-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="score-container">
+            <div>Score: <span id="score">0</span></div>
+            <div>Tanks Destroyed: <span id="tanks-destroyed">0</span></div>
+            <div>Health: <span id="health">100</span>%</div>
+        </div>
+        
+        <div id="level-indicator">Level: <span id="level">1</span></div>
+        
+        <div id="helicopter"></div>
+        <div id="ground"></div>
+        
+        <div id="fire-button">FIRE</div>
+        
+        <div id="game-over">
+            <h2>Game Over!</h2>
+            <div id="final-score"></div>
+            <button id="restart-btn">Play Again</button>
+            <a id="discord-btn" href="https://discord.gg/a4xf2RbSHx" target="_blank">Join Insiders!</a>
+        </div>
+    </div>
+
+    <script>
+        // Game elements
+        const gameContainer = document.getElementById('game-container');
+        const helicopter = document.getElementById('helicopter');
+        const scoreElement = document.getElementById('score');
+        const tanksDestroyedElement = document.getElementById('tanks-destroyed');
+        const healthElement = document.getElementById('health');
+        const levelElement = document.getElementById('level');
+        const gameOverElement = document.getElementById('game-over');
+        const finalScoreElement = document.getElementById('final-score');
+        const restartBtn = document.getElementById('restart-btn');
+        const fireButton = document.getElementById('fire-button');
+        
+        // Game state
+        let gameActive = true;
+        let score = 0;
+        let tanksDestroyed = 0;
+        let health = 100;
+        let level = 1;
+        let helicopterX = 50;
+        let helicopterY = 30;
+        let targetX = helicopterX;
+        let targetY = helicopterY;
+        let tanks = [];
+        let lastTankSpawn = 0;
+        let tankSpawnRate = 3000; // milliseconds
+        let lastFire = 0;
+        let fireRate = 500; // milliseconds
+        
+        // Game dimensions
+        const gameWidth = gameContainer.clientWidth;
+        const gameHeight = gameContainer.clientHeight;
+        
+        // Initialize game
+        function initGame() {
+            // Position helicopter initially
+            updateHelicopterPosition();
+            
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+            
+            // Start spawning tanks
+            spawnTank();
+            
+            // Control events for touch/mouse
+            setupControls();
+        }
+        
+        // Main game loop
+        function gameLoop(timestamp) {
+            if (!gameActive) return;
+            
+            moveHelicopter();
+            moveTanks(timestamp);
+            moveProjectiles();
+            checkCollisions();
+            
+            // Spawn tanks at regular intervals
+            if (timestamp - lastTankSpawn > tankSpawnRate) {
+                spawnTank();
+                lastTankSpawn = timestamp;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Update helicopter position with smooth movement
+        function updateHelicopterPosition() {
+            helicopter.style.left = helicopterX + '%';
+            helicopter.style.top = helicopterY + '%';
+        }
+        
+        // Move helicopter toward target position
+        function moveHelicopter() {
+            // Move gradually toward target position
+            const dx = targetX - helicopterX;
+            const dy = targetY - helicopterY;
+            
+            helicopterX += dx * 0.1;
+            helicopterY += dy * 0.1;
+            
+            // Keep helicopter within bounds
+            if (helicopterX < 5) helicopterX = 5;
+            if (helicopterX > 95) helicopterX = 95;
+            if (helicopterY < 10) helicopterY = 10;
+            if (helicopterY > 70) helicopterY = 70;
+            
+            updateHelicopterPosition();
+        }
+        
+        // Spawn a new tank
+        function spawnTank() {
+            const tank = document.createElement('div');
+            tank.className = 'tank';
+            gameContainer.appendChild(tank);
+            
+            // Random position along the bottom
+            const tankX = Math.random() * 90 + 5;
+            tank.style.left = tankX + '%';
+            
+            // Add to tanks array
+            const tankObj = {
+                element: tank,
+                x: tankX,
+                health: 100,
+                lastFire: 0,
+                fireRate: 2000 + Math.random() * 2000,
+                speed: 0.02 + Math.random() * 0.05
+            };
+            
+            tanks.push(tankObj);
+        }
+        
+        // Move all tanks
+        function moveTanks(timestamp) {
+            tanks.forEach(tank => {
+                // Move tank horizontally toward helicopter
+                const helicopterCenterX = helicopterX;
+                const tankCenterX = tank.x;
+                
+                if (helicopterCenterX > tankCenterX) {
+                    tank.x += tank.speed;
+                } else {
+                    tank.x -= tank.speed;
+                }
+                
+                // Update tank position
+                tank.element.style.left = tank.x + '%';
+                
+                // Fire at random intervals
+                if (timestamp - tank.lastFire > tank.fireRate) {
+                    fireLemon(tank);
+                    tank.lastFire = timestamp;
+                }
+            });
+        }
+        
+        // Fire strawberry from helicopter
+        function fireStrawberry() {
+            const now = Date.now();
+            if (now - lastFire < fireRate) return;
+            lastFire = now;
+            
+            const strawberry = document.createElement('div');
+            strawberry.className = 'strawberry';
+            gameContainer.appendChild(strawberry);
+            
+            // Position strawberry at helicopter position
+            const helicopterRect = helicopter.getBoundingClientRect();
+            const gameRect = gameContainer.getBoundingClientRect();
+            
+            const strawberryX = (helicopterRect.left + helicopterRect.width / 2 - gameRect.left) / gameRect.width * 100;
+            const strawberryY = (helicopterRect.bottom - gameRect.top) / gameRect.height * 100;
+            
+            strawberry.style.left = strawberryX + '%';
+            strawberry.style.top = strawberryY + '%';
+            
+            // Add to projectiles data
+            strawberry.dataset.type = 'strawberry';
+            strawberry.dataset.x = strawberryX;
+            strawberry.dataset.y = strawberryY;
+            strawberry.dataset.speed = 2 + Math.random();
+            strawberry.dataset.angle = Math.PI / 2 + (Math.random() - 0.5) * 0.2; // Mostly downward
+        }
+        
+        // Fire lemon from tank
+        function fireLemon(tank) {
+            const lemon = document.createElement('div');
+            lemon.className = 'lemon';
+            gameContainer.appendChild(lemon);
+            
+            // Position lemon at tank position
+            const tankRect = tank.element.getBoundingClientRect();
+            const gameRect = gameContainer.getBoundingClientRect();
+            
+            const lemonX = (tankRect.left + tankRect.width / 2 - gameRect.left) / gameRect.width * 100;
+            const lemonY = (tankRect.top - gameRect.top) / gameRect.height * 100;
+            
+            lemon.style.left = lemonX + '%';
+            lemon.style.top = lemonY + '%';
+            
+            // Calculate angle toward helicopter
+            const dx = helicopterX - lemonX;
+            const dy = helicopterY - lemonY;
+            const angle = Math.atan2(dy, dx);
+            
+            // Add to projectiles data
+            lemon.dataset.type = 'lemon';
+            lemon.dataset.x = lemonX;
+            lemon.dataset.y = lemonY;
+            lemon.dataset.speed = 1 + Math.random() * 0.5;
+            lemon.dataset.angle = angle;
+        }
+        
+        // Move all projectiles
+        function moveProjectiles() {
+            // Move strawberries
+            const strawberries = document.querySelectorAll('.strawberry');
+            strawberries.forEach(strawberry => {
+                let x = parseFloat(strawberry.dataset.x);
+                let y = parseFloat(strawberry.dataset.y);
+                const speed = parseFloat(strawberry.dataset.speed);
+                const angle = parseFloat(strawberry.dataset.angle);
+                
+                x += Math.cos(angle) * speed;
+                y += Math.sin(angle) * speed;
+                
+                strawberry.dataset.x = x;
+                strawberry.dataset.y = y;
+                strawberry.style.left = x + '%';
+                strawberry.style.top = y + '%';
+                
+                // Remove if out of bounds
+                if (y > 100 || y < 0 || x < 0 || x > 100) {
+                    strawberry.remove();
+                }
+            });
+            
+            // Move lemons
+            const lemons = document.querySelectorAll('.lemon');
+            lemons.forEach(lemon => {
+                let x = parseFloat(lemon.dataset.x);
+                let y = parseFloat(lemon.dataset.y);
+                const speed = parseFloat(lemon.dataset.speed);
+                const angle = parseFloat(lemon.dataset.angle);
+                
+                x += Math.cos(angle) * speed;
+                y += Math.sin(angle) * speed;
+                
+                lemon.dataset.x = x;
+                lemon.dataset.y = y;
+                lemon.style.left = x + '%';
+                lemon.style.top = y + '%';
+                
+                // Remove if out of bounds
+                if (y > 100 || y < 0 || x < 0 || x > 100) {
+                    lemon.remove();
+                }
+            });
+        }
+        
+        // Check for collisions
+        function checkCollisions() {
+            const helicopterRect = helicopter.getBoundingClientRect();
+            
+            // Check strawberry hitting tanks
+            const strawberries = document.querySelectorAll('.strawberry');
+            strawberries.forEach(strawberry => {
+                const strawberryRect = strawberry.getBoundingClientRect();
+                
+                tanks.forEach((tank, index) => {
+                    const tankRect = tank.element.getBoundingClientRect();
+                    
+                    if (isColliding(strawberryRect, tankRect)) {
+                        // Create explosion effect
+                        createExplosion(tank.x, 80);
+                        
+                        // Remove strawberry
+                        strawberry.remove();
+                        
+                        // Damage tank
+                        tank.health -= 50;
+                        
+                        // If tank destroyed
+                        if (tank.health <= 0) {
+                            tank.element.remove();
+                            tanks.splice(index, 1);
+                            tanksDestroyed++;
+                            score += 100;
+                            
+                            // Update score display
+                            scoreElement.textContent = score;
+                            tanksDestroyedElement.textContent = tanksDestroyed;
+                            
+                            // Level up after certain number of tanks
+                            if (tanksDestroyed % 10 === 0) {
+                                levelUp();
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Check lemon hitting helicopter
+            const lemons = document.querySelectorAll('.lemon');
+            lemons.forEach(lemon => {
+                const lemonRect = lemon.getBoundingClientRect();
+                
+                if (isColliding(lemonRect, helicopterRect)) {
+                    lemon.remove();
+                    
+                    // Damage helicopter
+                    health -= 10;
+                    healthElement.textContent = health;
+                    
+                    // Shake effect
+                    helicopter.style.transition = 'transform 0.1s';
+                    helicopter.style.transform = 'translate(5px, 5px)';
+                    setTimeout(() => {
+                        helicopter.style.transform = 'translate(-5px, -5px)';
+                        setTimeout(() => {
+                            helicopter.style.transform = 'translate(0, 0)';
+                        }, 100);
+                    }, 100);
+                    
+                    // Check if game over
+                    if (health <= 0) {
+                        endGame();
+                    }
+                }
+            });
+        }
+        
+        // Create explosion effect
+        function createExplosion(x, y) {
+            const explosion = document.createElement('div');
+            explosion.className = 'explosion';
+            gameContainer.appendChild(explosion);
+            
+            explosion.style.left = x + '%';
+            explosion.style.top = y + '%';
+            
+            // Remove explosion after animation
+            setTimeout(() => {
+                explosion.remove();
+            }, 500);
+        }
+        
+        // Level up
+        function levelUp() {
+            level++;
+            levelElement.textContent = level;
+            
+            // Increase difficulty
+            tankSpawnRate = Math.max(500, tankSpawnRate - 300);
+            
+            // Heal helicopter a bit
+            health = Math.min(100, health + 20);
+            healthElement.textContent = health;
+        }
+        
+        // Collision detection
+        function isColliding(rect1, rect2) {
+            return !(
+                rect1.right < rect2.left ||
+                rect1.left > rect2.right ||
+                rect1.bottom < rect2.top ||
+                rect1.top > rect2.bottom
+            );
+        }
+        
+        // End game
+        function endGame() {
+            gameActive = false;
+            
+            // Display final scores
+            finalScoreElement.innerHTML = `
+                <p>Score: ${score}</p>
+                <p>Tanks Destroyed: ${tanksDestroyed}</p>
+                <p>Level Reached: ${level}</p>
+            `;
+            
+            gameOverElement.style.display = 'block';
+        }
+        
+        // Restart game
+        function restartGame() {
+            // Reset scores and health
+            score = 0;
+            tanksDestroyed = 0;
+            health = 100;
+            level = 1;
+            tankSpawnRate = 3000;
+            
+            // Update UI
+            scoreElement.textContent = '0';
+            tanksDestroyedElement.textContent = '0';
+            healthElement.textContent = '100';
+            levelElement.textContent = '1';
+            
+            // Clear projectiles and tanks
+            document.querySelectorAll('.strawberry, .lemon, .tank, .explosion').forEach(el => el.remove());
+            tanks = [];
+            
+            // Reset helicopter position
+            helicopterX = 50;
+            helicopterY = 30;
+            targetX = helicopterX;
+            targetY = helicopterY;
+            updateHelicopterPosition();
+            
+            // Hide game over
+            gameOverElement.style.display = 'none';
+            
+            // Restart game
+            gameActive = true;
+            lastTankSpawn = 0;
+            initGame();
+        }
+        
+        // Setup touch and mouse controls
+        function setupControls() {
+            // Movement across the entire game container
+            gameContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = gameContainer.getBoundingClientRect();
+                targetX = (touch.clientX - rect.left) / rect.width * 100;
+                targetY = (touch.clientY - rect.top) / rect.height * 100;
+            });
+            
+            gameContainer.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) { // Left mouse button pressed
+                    const rect = gameContainer.getBoundingClientRect();
+                    targetX = (e.clientX - rect.left) / rect.width * 100;
+                    targetY = (e.clientY - rect.top) / rect.height * 100;
+                }
+            });
+            
+            // Fire button controls
+            fireButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startFiring();
+            });
+            
+            fireButton.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                stopFiring();
+            });
+            
+            fireButton.addEventListener('mousedown', () => {
+                startFiring();
+            });
+            
+            fireButton.addEventListener('mouseup', () => {
+                stopFiring();
+            });
+            
+            // Keyboard controls
+            document.addEventListener('keydown', (e) => {
+                if (e.key === ' ' || e.key === 'f') {
+                    fireStrawberry();
+                }
+            });
+            
+            // Restart button
+            restartBtn.addEventListener('click', restartGame);
+        }
+        
+        // Auto-fire control
+        let autoFireInterval;
+        
+        function startFiring() {
+            fireStrawberry();
+            autoFireInterval = setInterval(fireStrawberry, fireRate);
+        }
+        
+        function stopFiring() {
+            clearInterval(autoFireInterval);
+        }
+        
+        // Initialize on window load to ensure all assets are loaded
+        window.addEventListener('load', initGame);
+        
+        // Prevent default touch behavior to avoid scrolling
+        document.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
